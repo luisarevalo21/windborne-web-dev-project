@@ -111,8 +111,8 @@ const Map = () => {
   const [loading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState({ total: 0, filtered: 0, displayed: 0 });
-  const [radius, setRadius] = useState<number>(2000);
-  const [limit, setLimit] = useState<number>(50);
+  const [radius, setRadius] = useState<number>(1000);
+  const [limit, setLimit] = useState<number>(20);
   const [showControls, setShowControls] = useState<boolean>(true);
   const [loadingLocation, setLoadingLocation] = useState<{ lat: number; lon: number; radius: number } | undefined>(
     undefined
@@ -258,9 +258,12 @@ const Map = () => {
             Click <strong>"Load Balloons Here"</strong> to view balloons at your current map location,
             <br />
             or click <strong>"Load My Location"</strong> to find balloons near you.
+            <br />
+            <br />
+            💡 <strong>Tip:</strong> Use "⚡ Fast" preset (10 balloons, 500km) for quick loads!
           </div>
           <div style={{ fontSize: "14px", color: "#aaa" }}>
-            First load may take 30-60 seconds as the server wakes up and fetches weather data.
+            Default: 20 balloons within 1000km • First load may take 30-60 seconds
           </div>
         </div>
       )}
@@ -340,6 +343,67 @@ const Map = () => {
           }}
         >
           <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "15px" }}>🎯 Balloon Controls</div>
+
+          {/* Quick Preset Buttons */}
+          <div style={{ marginBottom: "15px" }}>
+            <label style={{ display: "block", marginBottom: "5px" }}>Quick Presets:</label>
+            <div style={{ display: "flex", gap: "5px" }}>
+              <button
+                onClick={() => {
+                  setRadius(500);
+                  setLimit(10);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "5px",
+                  background: "#2196F3",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                }}
+              >
+                ⚡ Fast
+              </button>
+              <button
+                onClick={() => {
+                  setRadius(1000);
+                  setLimit(20);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "5px",
+                  background: "#FF9800",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                }}
+              >
+                ⚖️ Balanced
+              </button>
+              <button
+                onClick={() => {
+                  setRadius(3000);
+                  setLimit(100);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "5px",
+                  background: "#F44336",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                }}
+              >
+                🌐 Full
+              </button>
+            </div>
+          </div>
 
           <div style={{ marginBottom: "15px" }}>
             <label style={{ display: "block", marginBottom: "5px" }}>Search Radius: {radius}km</label>
