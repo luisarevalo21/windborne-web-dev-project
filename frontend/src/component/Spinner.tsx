@@ -1,5 +1,3 @@
-import * as React from "react";
-
 interface SpinnerProps {
   location?: { lat: number; lon: number; radius: number };
 }

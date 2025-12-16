@@ -1,22 +1,38 @@
-import React from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Viewer, Entity, PointGraphics, PolylineGraphics, LabelGraphics } from "resium";
 import {
   Cartesian3,
   Cartesian2,
   Color,
-  HeadingPitchRange,
   Math as CesiumMath,
   PolylineArrowMaterialProperty,
 } from "cesium";
-import { useEffect, useState } from "react";
-import { fetchBalloonData } from "../ api/balloon";
+import { fetchBalloonData } from "../api/balloon";
 import Legend from "./Legend";
 import Spinner from "./Spinner";
 import ErrorDisplay from "./Error";
-import * as turf from "@turf/turf"; // Ensure Turf.js is imported
+import * as turf from "@turf/turf";
+
+interface BalloonPoint {
+  balloonID: string;
+  time: number;
+  longitude: number;
+  latitude: number;
+  altitude: number;
+  segmentColor?: string;
+  agreementScore?: number;
+  actualSpeed?: number;
+  actualDirection?: number;
+  weather?: {
+    windSpeed: number;
+    windDirection: number;
+  };
+}
+
 const ALT_CONVERSION = 10000;
-const DISPLAY_LENGTH_KM = 20; // How long the vector arrow should be visually
-const BalloonPath = ({ path }) => {
+const DISPLAY_LENGTH_KM = 20;
+
+const BalloonPath = ({ path }: { path: BalloonPoint[] }) => {
   if (!path || path.length < 2) return null;
   const ALT_CONVERSION = 10000;
   const segments = [];
@@ -37,7 +53,8 @@ const BalloonPath = ({ path }) => {
     );
     const endPosition = Cartesian3.fromDegrees(P_end.longitude, P_end.latitude, P_end.altitude * ALT_CONVERSION);
 
-    const color = Color[P_end.segmentColor.toUpperCase()].withAlpha(0.8);
+    const colorName = P_end.segmentColor.toUpperCase() as keyof typeof Color;
+    const color = (Color[colorName] as any).withAlpha(0.8);
 
     // Create arrow material for direction indication
     const arrowMaterial = new PolylineArrowMaterialProperty(color);
@@ -96,18 +113,17 @@ const BalloonPath = ({ path }) => {
 };
 
 const Map = () => {
-  const [balloons, setBalloons] = useState([]);
+  const [balloons, setBalloons] = useState<BalloonPoint[][]>([]);
   const [loading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState({ total: 0, filtered: 0, displayed: 0 });
   const [radius, setRadius] = useState<number>(2000);
   const [limit, setLimit] = useState<number>(50);
   const [showControls, setShowControls] = useState<boolean>(true);
-  const [loadingLocation, setLoadingLocation] = useState<{ lat: number; lon: number; radius: number } | null>(null);
-  const viewerRef = React.useRef(null);
+  const [loadingLocation, setLoadingLocation] = useState<{ lat: number; lon: number; radius: number } | undefined>(undefined);
+  const viewerRef = useRef<any>(null);
 
-  const currentSegment = balloons.length > 0 && balloons[0].length > 0 ? balloons[0][0] : null;
-  const START_ALTITUDE_M = currentSegment ? currentSegment.altitude * ALT_CONVERSION : 0;
+  const currentSegment: BalloonPoint | null = balloons.length > 0 && balloons[0].length > 0 ? balloons[0][0] : null;
 
   // Function to get current camera position
   const getCurrentCameraPosition = () => {
@@ -222,7 +238,7 @@ const Map = () => {
         ))}
 
         {/* T=0 vectors and point for first balloon */}
-        {startPosition && (
+        {startPosition && currentSegment && (
           <Entity position={startPosition} name={`Balloon ${currentSegment.balloonID} (T=0)`}>
             <PointGraphics pixelSize={15} color={Color.RED} outlineColor={Color.WHITE} outlineWidth={2} />
           </Entity>
