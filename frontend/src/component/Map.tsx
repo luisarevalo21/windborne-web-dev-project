@@ -1,13 +1,7 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Viewer, Entity, PointGraphics, PolylineGraphics, LabelGraphics } from "resium";
-import {
-  Cartesian3,
-  Cartesian2,
-  Color,
-  Math as CesiumMath,
-  PolylineArrowMaterialProperty,
-} from "cesium";
-import { fetchBalloonData } from "../api/balloon";
+import { Cartesian3, Cartesian2, Color, Math as CesiumMath, PolylineArrowMaterialProperty } from "cesium";
+import { fetchBalloonData } from "../ api/balloon";
 import Legend from "./Legend";
 import Spinner from "./Spinner";
 import ErrorDisplay from "./Error";
@@ -120,7 +114,9 @@ const Map = () => {
   const [radius, setRadius] = useState<number>(2000);
   const [limit, setLimit] = useState<number>(50);
   const [showControls, setShowControls] = useState<boolean>(true);
-  const [loadingLocation, setLoadingLocation] = useState<{ lat: number; lon: number; radius: number } | undefined>(undefined);
+  const [loadingLocation, setLoadingLocation] = useState<{ lat: number; lon: number; radius: number } | undefined>(
+    undefined
+  );
   const viewerRef = useRef<any>(null);
 
   const currentSegment: BalloonPoint | null = balloons.length > 0 && balloons[0].length > 0 ? balloons[0][0] : null;
@@ -151,7 +147,7 @@ const Map = () => {
         options.radius = customRadius || radius;
         setLoadingLocation({ lat: userLat, lon: userLon, radius: customRadius || radius });
       } else {
-        setLoadingLocation(null);
+        setLoadingLocation(undefined);
       }
 
       const response = await fetchBalloonData(options);
@@ -171,7 +167,7 @@ const Map = () => {
       setError(errorMessage);
     } finally {
       setIsLoading(false);
-      setLoadingLocation(null);
+      setLoadingLocation(undefined);
     }
   };
 
@@ -214,17 +210,21 @@ const Map = () => {
 
     const turfStartPoint = turf.point([startLon, startLat]);
 
-    const modelDir = currentSegment.weather.windDirection;
-    const modelEndPoint = turf.destination(turfStartPoint, DISPLAY_LENGTH_KM, modelDir, { units: "kilometers" });
-    const modelCoords = modelEndPoint.geometry.coordinates;
-    const modelEndPosition = Cartesian3.fromDegrees(modelCoords[0], modelCoords[1], startAltM);
-    modelVectorPoints = [startPosition, modelEndPosition];
+    if (currentSegment.weather) {
+      const modelDir = currentSegment.weather.windDirection;
+      const modelEndPoint = turf.destination(turfStartPoint, DISPLAY_LENGTH_KM, modelDir, { units: "kilometers" });
+      const modelCoords = modelEndPoint.geometry.coordinates;
+      const modelEndPosition = Cartesian3.fromDegrees(modelCoords[0], modelCoords[1], startAltM);
+      modelVectorPoints = [startPosition, modelEndPosition];
+    }
 
-    const actualDir = currentSegment.actualDirection;
-    const actualEndPoint = turf.destination(turfStartPoint, DISPLAY_LENGTH_KM, actualDir, { units: "kilometers" });
-    const actualCoords = actualEndPoint.geometry.coordinates;
-    const actualEndPosition = Cartesian3.fromDegrees(actualCoords[0], actualCoords[1], startAltM);
-    actualVectorPoints = [startPosition, actualEndPosition];
+    if (currentSegment.actualDirection !== undefined) {
+      const actualDir = currentSegment.actualDirection;
+      const actualEndPoint = turf.destination(turfStartPoint, DISPLAY_LENGTH_KM, actualDir, { units: "kilometers" });
+      const actualCoords = actualEndPoint.geometry.coordinates;
+      const actualEndPosition = Cartesian3.fromDegrees(actualCoords[0], actualCoords[1], startAltM);
+      actualVectorPoints = [startPosition, actualEndPosition];
+    }
   }
 
   return (
