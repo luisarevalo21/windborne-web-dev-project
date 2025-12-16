@@ -31,15 +31,11 @@ app.use("/warmup", (req, res) => {
 app.use("/api/balloon", BalloonRoute);
 app.use("/api/weather", WeatherRoute);
 
-// Serve static files in production
-if (NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/dist")));
-
-  // Catch-all route for client-side routing (Express 5 compatible)
-  app.get("/*", (req, res) => {
-    res.sendFile(path.join(__dirname, "../frontend/dist/index.html"));
-  });
-}
+// Serve static files in production (only if frontend dist exists)
+// For separate backend deployment, this section is not needed
+// if (NODE_ENV === "production") {
+//   app.use(express.static(path.join(__dirname, "../frontend/dist")));
+// }
 
 // Error handling middleware
 app.use((err, req, res, next) => {
