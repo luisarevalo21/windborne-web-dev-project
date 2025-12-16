@@ -180,21 +180,21 @@ const Map = () => {
   };
 
   useEffect(() => {
-    // Try to get user's location first
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        position => {
-          const { latitude, longitude } = position.coords;
-          getBalloonData(latitude, longitude);
-        },
-        error => {
-          console.log("Location denied, using default view:", error);
-          getBalloonData();
-        }
-      );
-    } else {
-      getBalloonData();
-    }
+    // Don't load automatically on production - wait for user interaction
+    // This prevents timeout on initial load with 900+ balloons
+    // Users can click "Load Balloons Here" or "Load My Location" button
+    // Optionally, try to get user's location but don't auto-load
+    // if (navigator.geolocation) {
+    //   navigator.geolocation.getCurrentPosition(
+    //     position => {
+    //       const { latitude, longitude } = position.coords;
+    //       getBalloonData(latitude, longitude);
+    //     },
+    //     error => {
+    //       console.log("Location denied, using default view:", error);
+    //     }
+    //   );
+    // }
   }, []);
 
   let modelVectorPoints = null;
@@ -231,6 +231,40 @@ const Map = () => {
     <>
       {loading && <Spinner location={loadingLocation} />}
       {error && !loading && <ErrorDisplay error={error} />}
+
+      {/* Welcome message when no balloons loaded */}
+      {!loading && !error && balloons.length === 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "rgba(0, 0, 0, 0.9)",
+            color: "white",
+            padding: "40px",
+            borderRadius: "12px",
+            zIndex: 2000,
+            maxWidth: "600px",
+            textAlign: "center",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
+          }}
+        >
+          <div style={{ fontSize: "48px", marginBottom: "20px" }}>🎈</div>
+          <div style={{ fontSize: "28px", fontWeight: "bold", marginBottom: "20px" }}>
+            Welcome to Weather Balloon Tracker
+          </div>
+          <div style={{ fontSize: "16px", lineHeight: "1.6", marginBottom: "25px" }}>
+            Click <strong>"Load Balloons Here"</strong> to view balloons at your current map location,
+            <br />
+            or click <strong>"Load My Location"</strong> to find balloons near you.
+          </div>
+          <div style={{ fontSize: "14px", color: "#aaa" }}>
+            First load may take 30-60 seconds as the server wakes up and fetches weather data.
+          </div>
+        </div>
+      )}
+
       <Viewer full ref={viewerRef}>
         {/* Draw paths for all balloons */}
         {balloons.map((path, index) => (
