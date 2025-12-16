@@ -77,11 +77,13 @@ npm install
 
 ## 🚀 Running the Application
 
-### Start the Backend Server
+### Development Mode
+
+**Start the Backend Server**
 
 ```bash
 cd backend
-npm start
+npm run dev
 ```
 
 Server runs on `http://localhost:3000`
@@ -91,7 +93,7 @@ Server runs on `http://localhost:3000`
 - `GET /api/balloon` - Fetch processed balloon trajectories with weather data
 - `GET /health` - Health check endpoint
 
-### Start the Frontend
+**Start the Frontend**
 
 ```bash
 cd frontend
@@ -100,9 +102,13 @@ npm run dev
 
 Frontend runs on `http://localhost:5173` (default Vite port)
 
-### Access the Application
+**Access the Application**
 
 Open your browser and navigate to `http://localhost:5173`
+
+### Production Deployment
+
+For production deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ## 📁 Project Structure
 

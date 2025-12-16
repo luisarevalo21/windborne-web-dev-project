@@ -1,1 +1,16 @@
+# Environment variables
 .env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+
+# Cache
+cache/
+*.cache.json
+
+# Logs
+logs
+*.log
+npm-debug.log*

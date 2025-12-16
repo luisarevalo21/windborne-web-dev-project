@@ -2,8 +2,35 @@ const SCALE_HEIGHT_METERS = 7640; // Approx scale height
 // OR
 const TENS_OF_KM = 10000;
 const uuidv4 = require("uuid").v4;
-const fetchWeatherData = require("./fetchWeatherData");
+// const fetchWeatherData = require("./fetchWeatherData");
+const { fetchWeatherData } = require("../cache"); // Use cached version
 const turf = require("@turf/turf");
+
+// Filter balloons by geographic region
+const filterBalloonsByRegion = (balloonPaths, centerLat, centerLon, radiusKm) => {
+  if (!centerLat || !centerLon || !radiusKm) return balloonPaths;
+
+  return balloonPaths.filter(path => {
+    if (!path || path.length === 0) return false;
+
+    // Use most recent position (index 0 after sorting)
+    const latestPoint = path[0];
+    const from = turf.point([centerLon, centerLat]);
+    const to = turf.point([latestPoint.longitude, latestPoint.latitude]);
+    const distance = turf.distance(from, to, { units: "kilometers" });
+
+    return distance <= radiusKm;
+  });
+};
+
+// Smart sampling to distribute balloons evenly
+const sampleBalloons = (balloonPaths, targetCount) => {
+  if (balloonPaths.length <= targetCount) return balloonPaths;
+
+  // Take every Nth balloon for even distribution
+  const step = Math.ceil(balloonPaths.length / targetCount);
+  return balloonPaths.filter((_, index) => index % step === 0);
+};
 const validateBalloonData = data => {
   const [lat, lon, altitude] = data;
 
@@ -125,7 +152,8 @@ function calculateActualMovement(sortedBalloonData) {
   }
   return sortedBalloonData;
 }
-const fetchBalloonData = async () => {
+const fetchBalloonData = async (options = {}) => {
+  const { limit = 50, lat, lon, radius = 2000 } = options;
   const mock = false; //set to false to fetch real data
 
   //testing purposes with mock data
@@ -310,10 +338,34 @@ const fetchBalloonData = async () => {
       const route = String(i).padStart(2, "0");
       const url = `https://a.windbornesystems.com/treasure/${route}.json`;
 
-      balloonPromises.push(fetch(url).then(res => res.json()));
+      balloonPromises.push(
+        fetch(url)
+          .then(async res => {
+            // Check if response is OK and content-type is JSON
+            if (!res.ok) {
+              console.error(`HTTP error from ${url}: ${res.status} ${res.statusText}`);
+              return null;
+            }
+
+            const contentType = res.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              console.error(`Non-JSON response from ${url}: ${contentType}`);
+              return null;
+            }
+
+            return res.json();
+          })
+          .catch(err => {
+            console.error(`Failed to fetch data from ${url}:`, err.message);
+            return null;
+          })
+      );
+      // balloonPromises.push(fetch(url).then(res => res.json()));
     }
     //all ballon data
     const balloonResults = await Promise.all(balloonPromises);
+
+    const validResults = balloonResults.filter(result => result !== null && Array.isArray(result));
     //mock data for testing
     // const balloonResults = [
     //   [[10.900048798584638, -150.9088746079718, 21.699713912787843]],
@@ -321,10 +373,21 @@ const fetchBalloonData = async () => {
     //   [[-41.744405017231024, 153.0839787072968, 21.504142191058325]],
     //   [[14.79445850551678, -71.90010219907184, 2.96962142688327]],
     // ];
-    for (let i = 0; i < balloonResults.length; i++) {
+    if (validResults.length === 0) {
+      throw new Error("No valid balloon data available. The Windborne API may be down or returning invalid data.");
+    }
+    //process each hour's data
+
+    for (let i = 0; i < validResults.length; i++) {
       const hourOffset = i;
       //all the balloon data for this hour offset
-      const rawPoints = balloonResults[i];
+      const rawPoints = validResults[i];
+
+      // Safety check: ensure rawPoints is a valid array
+      if (!rawPoints || !Array.isArray(rawPoints)) {
+        console.warn(`Invalid rawPoints at index ${i}, skipping...`);
+        continue;
+      }
 
       for (let balloonIndex = 0; balloonIndex < rawPoints.length; balloonIndex++) {
         const rawPoint = rawPoints[balloonIndex];
@@ -357,16 +420,32 @@ const fetchBalloonData = async () => {
       }
     }
 
-    //get only the first balloon at index 0 for testing and all time slot from 0-23
+    // Sort all balloon paths
+    const sortedBalloonData = sortPaths(Object.values(balloonPaths));
+    console.log(`Total balloons available: ${sortedBalloonData.length}`);
 
-    const slicedBalloonPaths = balloonPaths.slice(0, 1);
+    // Apply regional filtering if coordinates provided
+    let filteredBalloons = sortedBalloonData;
+    if (lat && lon) {
+      filteredBalloons = filterBalloonsByRegion(sortedBalloonData, lat, lon, radius);
+      console.log(`Balloons within ${radius}km of (${lat}, ${lon}): ${filteredBalloons.length}`);
+    }
 
-    const sortedBalloonData = sortPaths(Object.values(slicedBalloonPaths));
+    // Smart sampling to get target count
+    const sampledBalloons = sampleBalloons(filteredBalloons, limit);
+    console.log(`Processing ${sampledBalloons.length} balloons (limit: ${limit})`);
 
-    const weatherEnrichedData = await fetchWeatherData(sortedBalloonData);
+    // Only fetch weather for sampled balloons (optimized)
+    const weatherEnrichedData = await fetchWeatherData(sampledBalloons);
     const movementData = await calculateActualMovement(weatherEnrichedData);
     const comparisonData = await calculateAgreementScores(movementData);
-    return comparisonData;
+
+    return {
+      balloons: comparisonData,
+      total: sortedBalloonData.length,
+      filtered: filteredBalloons.length,
+      displayed: sampledBalloons.length,
+    };
 
     //struture is [index of balloon][array of points for that balloon sorted from oldest to newest]
     //data is an array of objects with lat lon altitude time balloonID\

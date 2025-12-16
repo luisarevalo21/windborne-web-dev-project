@@ -51,64 +51,165 @@ async function fetchHistoricalWeather(latitude, longitude, pressure) {
   return weatherData;
 }
 
-async function fetchWeatherData(sortedBalloonData) {
-  // Implement the logic to fetch weather data based on sortedBalloonData
-  // This is a placeholder function
-  // console.log("Fetching weather data for balloon data...", sortedBalloonData);
+async function fetchWeatherData(balloonPaths) {
   const weatherCache = {};
 
-  //here i'll be fetching the weatehr data for the sorted balloon data
   try {
-    for (let pathIndex = 0; pathIndex < sortedBalloonData.length; pathIndex++) {
-      const balloonPath = sortedBalloonData[pathIndex];
+    const uniqueLocations = new Map();
+
+    for (let pathIndex = 0; pathIndex < balloonPaths.length; pathIndex++) {
+      const balloonPath = balloonPaths[pathIndex];
 
       for (let i = 0; i < balloonPath.length; i++) {
-        const balloonPoint = balloonPath[i];
-        // console.log("Processing balloon point:", balloonPoint);
-        // Fetch weather data for balloonPoint.latitude, balloonPoint.longitude, balloonPoint.altitude
-        // and attach it to balloonPoint as needed
-        const { lower, upper } = findBoundingHeights(balloonPoint.altitude);
-        const cacheKey = `${balloonPoint.latitude.toFixed(2)},${balloonPoint.longitude.toFixed(2)}`;
+        const point = balloonPath[i];
+        const { lower, upper } = findBoundingHeights(point.altitude);
 
-        if (!weatherCache[cacheKey]) {
-          //fetch the weather data for lwoer and upper heights
-          const [weatherLower, weatherUpper] = await Promise.all([
-            fetchHistoricalWeather(balloonPoint.latitude, balloonPoint.longitude, lower.pressure),
-            fetchHistoricalWeather(balloonPoint.latitude, balloonPoint.longitude, upper.pressure),
-          ]);
-          weatherCache[cacheKey] = { lower: weatherLower, upper: weatherUpper };
+        // AGGRESSIVE ROUNDING - reduces unique locations from ~500 to ~50
+        const cacheKey = `${point.latitude.toFixed(0)},${point.longitude.toFixed(0)}`; // Round to nearest degree
+
+        if (!uniqueLocations.has(cacheKey)) {
+          uniqueLocations.set(cacheKey, {
+            latitude: Math.round(point.latitude),
+            longitude: Math.round(point.longitude),
+            lowerPressure: lower.pressure,
+            upperPressure: upper.pressure,
+          });
         }
-        const timeIndex = balloonPoint.time;
-
-        const lowerWeather = {
-          windSpeed: weatherCache[cacheKey].lower.hourly.wind_speed[timeIndex],
-          windDirection: weatherCache[cacheKey].lower.hourly.wind_direction[timeIndex],
-          temperature: weatherCache[cacheKey].lower.hourly.temperature[timeIndex],
-        };
-
-        const upperWeather = {
-          windSpeed: weatherCache[cacheKey].upper.hourly.wind_speed[timeIndex],
-          windDirection: weatherCache[cacheKey].upper.hourly.wind_direction[timeIndex],
-          temperature: weatherCache[cacheKey].upper.hourly.temperature[timeIndex],
-        };
-
-        // Interpolate
-        balloonPoint.weather = interpolateWeather(
-          lowerWeather,
-          upperWeather,
-          balloonPoint.altitude,
-          lower.altitude,
-          upper.altitude
-        );
       }
     }
 
-    return sortedBalloonData;
+    console.log(`Fetching weather for ${uniqueLocations.size} unique locations (rounded)...`);
+
+    // Add delay between requests to avoid rate limit
+    let requestCount = 0;
+    for (const [cacheKey, location] of uniqueLocations) {
+      try {
+        // Add 200ms delay between requests
+        if (requestCount > 0) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+
+        const [weatherLower, weatherUpper] = await Promise.all([
+          fetchHistoricalWeather(location.latitude, location.longitude, location.lowerPressure),
+          fetchHistoricalWeather(location.latitude, location.longitude, location.upperPressure),
+        ]);
+
+        weatherCache[cacheKey] = { lower: weatherLower, upper: weatherUpper };
+        requestCount++;
+
+        console.log(`Fetched ${requestCount}/${uniqueLocations.size} locations...`);
+      } catch (error) {
+        console.error(`Failed to fetch weather for ${cacheKey}:`, error.message);
+
+        // If rate limited, stop trying and use what we have
+        if (error.message.includes("limit exceeded")) {
+          console.warn("Rate limit hit, using cached data only");
+          break;
+        }
+
+        weatherCache[cacheKey] = null;
+      }
+    }
+
+    // Apply weather to all points using rounded lookup
+    for (let pathIndex = 0; pathIndex < balloonPaths.length; pathIndex++) {
+      const balloonPath = balloonPaths[pathIndex];
+
+      for (let i = 0; i < balloonPath.length; i++) {
+        const point = balloonPath[i];
+        const { lower, upper } = findBoundingHeights(point.altitude);
+        const cacheKey = `${point.latitude.toFixed(0)},${point.longitude.toFixed(0)}`;
+
+        const cachedWeather = weatherCache[cacheKey];
+
+        if (!cachedWeather) {
+          // Use default values if no weather data
+          point.weather = { windSpeed: 0, windDirection: 0, temperature: 0 };
+          continue;
+        }
+
+        const timeIndex = point.time;
+
+        const lowerWeather = {
+          windSpeed: cachedWeather.lower.hourly.wind_speed[timeIndex],
+          windDirection: cachedWeather.lower.hourly.wind_direction[timeIndex],
+          temperature: cachedWeather.lower.hourly.temperature[timeIndex],
+        };
+
+        const upperWeather = {
+          windSpeed: cachedWeather.upper.hourly.wind_speed[timeIndex],
+          windDirection: cachedWeather.upper.hourly.wind_direction[timeIndex],
+          temperature: cachedWeather.upper.hourly.temperature[timeIndex],
+        };
+
+        point.weather = interpolateWeather(lowerWeather, upperWeather, point.altitude, lower.altitude, upper.altitude);
+      }
+    }
+
+    return balloonPaths;
   } catch (error) {
     console.error("Error fetching weather data:", error);
     throw error;
   }
 }
+// async function fetchWeatherData(sortedBalloonData) {
+//   // Implement the logic to fetch weather data based on sortedBalloonData
+//   // This is a placeholder function
+//   // console.log("Fetching weather data for balloon data...", sortedBalloonData);
+//   const weatherCache = {};
+
+//   //here i'll be fetching the weatehr data for the sorted balloon data
+//   try {
+//     for (let pathIndex = 0; pathIndex < sortedBalloonData.length; pathIndex++) {
+//       const balloonPath = sortedBalloonData[pathIndex];
+
+//       for (let i = 0; i < balloonPath.length; i++) {
+//         const balloonPoint = balloonPath[i];
+//         // console.log("Processing balloon point:", balloonPoint);
+//         // Fetch weather data for balloonPoint.latitude, balloonPoint.longitude, balloonPoint.altitude
+//         // and attach it to balloonPoint as needed
+//         const { lower, upper } = findBoundingHeights(balloonPoint.altitude);
+//         const cacheKey = `${balloonPoint.latitude.toFixed(2)},${balloonPoint.longitude.toFixed(2)}`;
+
+//         if (!weatherCache[cacheKey]) {
+//           //fetch the weather data for lwoer and upper heights
+//           const [weatherLower, weatherUpper] = await Promise.all([
+//             fetchHistoricalWeather(balloonPoint.latitude, balloonPoint.longitude, lower.pressure),
+//             fetchHistoricalWeather(balloonPoint.latitude, balloonPoint.longitude, upper.pressure),
+//           ]);
+//           weatherCache[cacheKey] = { lower: weatherLower, upper: weatherUpper };
+//         }
+//         const timeIndex = balloonPoint.time;
+
+//         const lowerWeather = {
+//           windSpeed: weatherCache[cacheKey].lower.hourly.wind_speed[timeIndex],
+//           windDirection: weatherCache[cacheKey].lower.hourly.wind_direction[timeIndex],
+//           temperature: weatherCache[cacheKey].lower.hourly.temperature[timeIndex],
+//         };
+
+//         const upperWeather = {
+//           windSpeed: weatherCache[cacheKey].upper.hourly.wind_speed[timeIndex],
+//           windDirection: weatherCache[cacheKey].upper.hourly.wind_direction[timeIndex],
+//           temperature: weatherCache[cacheKey].upper.hourly.temperature[timeIndex],
+//         };
+
+//         // Interpolate
+//         balloonPoint.weather = interpolateWeather(
+//           lowerWeather,
+//           upperWeather,
+//           balloonPoint.altitude,
+//           lower.altitude,
+//           upper.altitude
+//         );
+//       }
+//     }
+
+//     return sortedBalloonData;
+//   } catch (error) {
+//     console.error("Error fetching weather data:", error);
+//     throw error;
+//   }
+// }
 
 function interpolate(value1, value2, targetAlt, alt1, alt2) {
   const ratio = (targetAlt - alt1) / (alt2 - alt1);
@@ -147,4 +248,9 @@ function findBoundingHeights(altitude) {
   return { lower, upper };
 }
 
-module.exports = fetchWeatherData;
+module.exports = {
+  fetchWeatherData, // Your original non-cached version
+  findBoundingHeights,
+  interpolateWeather,
+  fetchHistoricalWeather,
+};
