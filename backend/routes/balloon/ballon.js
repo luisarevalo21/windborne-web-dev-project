@@ -8,8 +8,6 @@ router.get("/", async (req, res) => {
     const lon = req.query.lon ? parseFloat(req.query.lon) : null;
     const radius = parseInt(req.query.radius) || 2000;
 
-    console.log(`Fetching balloons with params: limit=${limit}, lat=${lat}, lon=${lon}, radius=${radius}`);
-
     const data = await fetchBalloonData({ limit, lat, lon, radius });
 
     if (!data || !data.balloons || data.balloons.length === 0) {

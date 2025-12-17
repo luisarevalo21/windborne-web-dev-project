@@ -1,8 +1,10 @@
 interface SpinnerProps {
   location?: { lat: number; lon: number; radius: number };
+  stage?: string;
+  metadata?: { total: number; filtered: number; displayed: number };
 }
 
-const Spinner = ({ location }: SpinnerProps) => {
+const Spinner = ({ location, stage, metadata }: SpinnerProps) => {
   return (
     <div
       style={{
@@ -21,6 +23,12 @@ const Spinner = ({ location }: SpinnerProps) => {
       }}
     >
       <div style={{ fontSize: "24px", marginBottom: "20px" }}>🎈 Loading Balloon Data...</div>
+
+      {/* Current stage */}
+      {stage && (
+        <div style={{ fontSize: "18px", color: "#4CAF50", marginBottom: "15px", fontWeight: "bold" }}>{stage}</div>
+      )}
+
       {location ? (
         <div style={{ fontSize: "16px", color: "#aaa", textAlign: "center", marginBottom: "10px" }}>
           Searching within {location.radius}km of
@@ -29,6 +37,13 @@ const Spinner = ({ location }: SpinnerProps) => {
         </div>
       ) : (
         <div style={{ fontSize: "16px", color: "#aaa" }}>Fetching trajectories and weather data...</div>
+      )}
+
+      {/* Metadata progress */}
+      {metadata && metadata.total > 0 && (
+        <div style={{ fontSize: "14px", color: "#bbb", marginTop: "10px" }}>
+          Found {metadata.total} balloons → {metadata.filtered} in region → Loading {metadata.displayed}...
+        </div>
       )}
       <div
         style={{

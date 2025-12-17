@@ -5,6 +5,7 @@ import { fetchBalloonData } from "../ api/balloon";
 import Legend from "./Legend";
 import Spinner from "./Spinner";
 import ErrorDisplay from "./Error";
+import ControlPanel from "./ControlPanel";
 import * as turf from "@turf/turf";
 
 interface BalloonPoint {
@@ -117,6 +118,7 @@ const Map = () => {
   const [loadingLocation, setLoadingLocation] = useState<{ lat: number; lon: number; radius: number } | undefined>(
     undefined
   );
+  const [loadingStage, setLoadingStage] = useState<string>("");
   const viewerRef = useRef<any>(null);
 
   const currentSegment: BalloonPoint | null = balloons.length > 0 && balloons[0].length > 0 ? balloons[0][0] : null;
@@ -139,6 +141,7 @@ const Map = () => {
     try {
       setIsLoading(true);
       setError(null);
+      setLoadingStage("Connecting to server...");
 
       const options: any = { limit: customLimit || limit };
       if (userLat !== undefined && userLon !== undefined) {
@@ -149,6 +152,13 @@ const Map = () => {
       } else {
         setLoadingLocation(undefined);
       }
+
+      setLoadingStage("Fetching balloon positions...");
+
+      // Simulate progress for better UX
+      setTimeout(() => setLoadingStage("Filtering by region..."), 2000);
+      setTimeout(() => setLoadingStage("Fetching weather data..."), 4000);
+      setTimeout(() => setLoadingStage("Calculating trajectories..."), 20000);
 
       const response = await fetchBalloonData(options);
       const balloonData = response.balloons || response; // Support both old and new format
@@ -168,6 +178,7 @@ const Map = () => {
     } finally {
       setIsLoading(false);
       setLoadingLocation(undefined);
+      setLoadingStage("");
     }
   };
 
@@ -229,7 +240,7 @@ const Map = () => {
 
   return (
     <>
-      {loading && <Spinner location={loadingLocation} />}
+      {loading && <Spinner location={loadingLocation} stage={loadingStage} metadata={metadata} />}
       {error && !loading && <ErrorDisplay error={error} />}
 
       {/* Welcome message when no balloons loaded */}
@@ -302,183 +313,29 @@ const Map = () => {
         )}
       </Viewer>
 
-      {/* Control Panel Toggle Button */}
-      {!loading && !error && (
-        <button
-          onClick={() => setShowControls(!showControls)}
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "20px",
-            background: "rgba(0, 0, 0, 0.85)",
-            color: "white",
-            padding: "10px 15px",
-            borderRadius: "8px",
-            fontSize: "16px",
-            zIndex: 1001,
-            border: "1px solid rgba(255, 255, 255, 0.3)",
-            cursor: "pointer",
-            fontWeight: "bold",
+      {!error && (
+        <ControlPanel
+          loading={loading}
+          showControls={showControls}
+          radius={radius}
+          limit={limit}
+          onToggleControls={() => setShowControls(!showControls)}
+          onSetRadius={setRadius}
+          onSetLimit={setLimit}
+          onLoadBalloonsHere={refreshBalloonsHere}
+          onLoadMyLocation={() => {
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                position => {
+                  getBalloonData(position.coords.latitude, position.coords.longitude);
+                },
+                error => {
+                  console.error("Geolocation error:", error);
+                }
+              );
+            }
           }}
-        >
-          {showControls ? "✕" : "☰"}
-        </button>
-      )}
-
-      {/* Control Panel */}
-      {!loading && !error && showControls && (
-        <div
-          style={{
-            position: "absolute",
-            top: "60px",
-            left: "20px",
-            background: "rgba(0, 0, 0, 0.85)",
-            color: "white",
-            padding: "20px",
-            borderRadius: "8px",
-            fontSize: "14px",
-            zIndex: 1000,
-            border: "1px solid rgba(255, 255, 255, 0.3)",
-            minWidth: "250px",
-          }}
-        >
-          <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "15px" }}>🎯 Balloon Controls</div>
-
-          {/* Quick Preset Buttons */}
-          <div style={{ marginBottom: "15px" }}>
-            <label style={{ display: "block", marginBottom: "5px" }}>Quick Presets:</label>
-            <div style={{ display: "flex", gap: "5px" }}>
-              <button
-                onClick={() => {
-                  setRadius(500);
-                  setLimit(10);
-                }}
-                style={{
-                  flex: 1,
-                  padding: "5px",
-                  background: "#2196F3",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  cursor: "pointer",
-                }}
-              >
-                ⚡ Fast
-              </button>
-              <button
-                onClick={() => {
-                  setRadius(1000);
-                  setLimit(20);
-                }}
-                style={{
-                  flex: 1,
-                  padding: "5px",
-                  background: "#FF9800",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  cursor: "pointer",
-                }}
-              >
-                ⚖️ Balanced
-              </button>
-              <button
-                onClick={() => {
-                  setRadius(3000);
-                  setLimit(100);
-                }}
-                style={{
-                  flex: 1,
-                  padding: "5px",
-                  background: "#F44336",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  cursor: "pointer",
-                }}
-              >
-                🌐 Full
-              </button>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label style={{ display: "block", marginBottom: "5px" }}>Search Radius: {radius}km</label>
-            <input
-              type="range"
-              min="500"
-              max="5000"
-              step="100"
-              value={radius}
-              onChange={e => setRadius(Number(e.target.value))}
-              style={{ width: "100%" }}
-            />
-          </div>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label style={{ display: "block", marginBottom: "5px" }}>Max Balloons: {limit}</label>
-            <input
-              type="range"
-              min="10"
-              max="200"
-              step="10"
-              value={limit}
-              onChange={e => setLimit(Number(e.target.value))}
-              style={{ width: "100%" }}
-            />
-          </div>
-
-          <button
-            onClick={refreshBalloonsHere}
-            disabled={loading}
-            style={{
-              width: "100%",
-              padding: "10px",
-              background: loading ? "#666" : "#4CAF50",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "14px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
-              marginBottom: "10px",
-            }}
-          >
-            {loading ? "Loading..." : "🔄 Load Balloons Here"}
-          </button>
-
-          <button
-            onClick={() => {
-              if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                  position => {
-                    getBalloonData(position.coords.latitude, position.coords.longitude);
-                  },
-                  error => {
-                    console.error("Geolocation error:", error);
-                  }
-                );
-              }
-            }}
-            disabled={loading}
-            style={{
-              width: "100%",
-              padding: "10px",
-              background: loading ? "#666" : "#2196F3",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              fontSize: "14px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
-            }}
-          >
-            📍 Load My Location
-          </button>
-        </div>
+        />
       )}
 
       {!loading && !error && <Legend />}
@@ -496,12 +353,67 @@ const Map = () => {
             zIndex: 1000,
             border: "1px solid rgba(255, 255, 255, 0.3)",
             lineHeight: "1.6",
+            minWidth: "200px",
           }}
         >
-          <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "8px" }}>🎈 Balloon Tracker</div>
-          <div>
-            Displaying: <strong>{metadata.displayed || balloons.length}</strong>
+          <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "12px" }}>🎈 Balloon Tracker</div>
+
+          {/* Display count with dropdown */}
+          <div style={{ marginBottom: "10px" }}>
+            <label style={{ display: "block", marginBottom: "5px" }}>
+              Displaying: <strong>{metadata.displayed || balloons.length}</strong>
+            </label>
+            <div style={{ display: "flex", gap: "5px" }}>
+              <select
+                value={limit}
+                onChange={e => {
+                  const newLimit = Number(e.target.value);
+                  setLimit(newLimit);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "5px",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  color: "white",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                }}
+              >
+                <option value={10}>10 balloons</option>
+                <option value={20}>20 balloons</option>
+                <option value={30}>30 balloons</option>
+                <option value={50}>50 balloons</option>
+                <option value={75}>75 balloons</option>
+                <option value={100}>100 balloons</option>
+                <option value={150}>150 balloons</option>
+                <option value={200}>200 balloons</option>
+              </select>
+              <button
+                onClick={() => {
+                  const position = getCurrentCameraPosition();
+                  if (position) {
+                    getBalloonData(position.latitude, position.longitude);
+                  }
+                }}
+                style={{
+                  padding: "5px 10px",
+                  background: "#4CAF50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                }}
+                title="Reload with new limit"
+              >
+                🔄
+              </button>
+            </div>
           </div>
+
           {metadata.total > 0 && (
             <>
               <div>
@@ -519,112 +431,5 @@ const Map = () => {
     </>
   );
 };
-
-// const Map = () => {
-//   //   const position = Cartesian3.fromDegrees(-74.0707383, 40.7117244, 100);
-//   //   const pointGraphics = { pixelSize: 10 };
-
-//   const [balloons, setBalloons] = useState([]);
-//   const viewerRef = React.useRef(null);
-//   // You need to ensure the altitude is in meters (10km per unit)
-
-//   const currentSegment = balloons.length > 0 && balloons[0].length > 0 ? balloons[0][0] : null;
-//   const START_ALTITUDE_M = currentSegment ? currentSegment.altitude * ALT_CONVERSION : 0;
-//   useEffect(() => {
-//     const getBalloonData = async () => {
-//       const balloonData = await fetchBalloonData();
-//       setBalloons(balloonData);
-
-//       if (viewerRef.current && balloonData.length > 0) {
-//         // Fly to the oldest position to ensure the entire path is visible
-//         const firstBalloonStart = balloonData[balloonData.length - 1]; // T=23
-//         const targetPosition = Cartesian3.fromDegrees(
-//           firstBalloonStart.longitude,
-//           firstBalloonStart.latitude,
-//           firstBalloonStart.altitude * ALT_CONVERSION
-//         );
-
-//         viewerRef.current.cesiumElement.camera.flyTo({
-//           destination: targetPosition,
-//           duration: 4,
-//           offset: new HeadingPitchRange(0, CesiumMath.toRadians(-90), 5000000),
-//         });
-//       }
-//     };
-//     getBalloonData();
-//   }, []);
-
-//   // ... inside your functional component ...
-
-//   // Get the newest data point for the first balloon
-
-//   let modelVectorPoints = null;
-//   let actualVectorPoints = null;
-//   let startPosition = null;
-
-//   if (currentSegment) {
-//     const startLon = currentSegment.longitude;
-//     const startLat = currentSegment.latitude;
-//     const startAltM = currentSegment.altitude * ALT_CONVERSION;
-
-//     // 1. Define the START point (Cartesian3 for Cesium)
-//     startPosition = Cartesian3.fromDegrees(startLon, startLat, startAltM);
-
-//     // 2. Define the START point (Turf.js Point for calculation)
-//     const turfStartPoint = turf.point([startLon, startLat]);
-
-//     // --- A. Calculate Model Vector Endpoint (Blue) ---
-//     const modelDir = currentSegment.weather.windDirection;
-//     const modelEndPoint = turf.destination(turfStartPoint, DISPLAY_LENGTH_KM, modelDir, { units: "kilometers" });
-
-//     // 3. Convert Model Endpoint to Cesium's Cartesian3
-//     const modelCoords = modelEndPoint.geometry.coordinates; // Turf returns [lon, lat]
-//     const modelEndPosition = Cartesian3.fromDegrees(modelCoords[0], modelCoords[1], startAltM);
-
-//     modelVectorPoints = [startPosition, modelEndPosition];
-
-//     // --- B. Calculate Actual Vector Endpoint (Green) ---
-//     const actualDir = currentSegment.actualDirection; // Assumes you calculated this in Step 2.2
-//     const actualEndPoint = turf.destination(turfStartPoint, DISPLAY_LENGTH_KM, actualDir, { units: "kilometers" });
-
-//     // 4. Convert Actual Endpoint to Cesium's Cartesian3
-//     const actualCoords = actualEndPoint.geometry.coordinates;
-//     const actualEndPosition = Cartesian3.fromDegrees(actualCoords[0], actualCoords[1], startAltM);
-
-//     actualVectorPoints = [startPosition, actualEndPosition];
-//   }
-
-//   //   const position = Cartesian3.fromDegrees(-74.0707383, 40.7117244, 100);
-
-//   return (
-//     <Viewer full ref={viewerRef}>
-//       {/* Draw the entire path segmented by color */}
-//       {balloons.length > 0 && balloons.map((path, index) => <BalloonPath key={index} path={path} />)}
-//       {/* Draw the T=0 vectors and point for Balloon #0 (as before) */}
-//       {startPosition && (
-//         <Entity position={startPosition} name={`Balloon ${currentSegment.balloonID} (T=0)`}>
-//           <PointGraphics pixelSize={15} color={Color.RED} outlineColor={Color.WHITE} outlineWidth={2} />
-//         </Entity>
-//       )}
-//       {/* Model Vector (Blue) */}
-//       {modelVectorPoints && (
-//         <Entity name="Model Wind Vector">
-//           <PolylineGraphics positions={modelVectorPoints} width={5} material={Color.BLUE.withAlpha(0.8)} show={true} />
-//         </Entity>
-//       )}
-//       {/* Actual Vector (Green) */}
-//       {actualVectorPoints && (
-//         <Entity name="Actual Movement Vector">
-//           <PolylineGraphics
-//             positions={actualVectorPoints}
-//             width={5}
-//             material={Color.GREEN.withAlpha(0.8)}
-//             show={true}
-//           />
-//         </Entity>
-//       )}
-//     </Viewer>
-//   );
-// };
 
 export default Map;

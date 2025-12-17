@@ -1,8 +1,6 @@
 const SCALE_HEIGHT_METERS = 7640; // Approx scale height
 // OR
 const TENS_OF_KM = 10000;
-const uuidv4 = require("uuid").v4;
-// const fetchWeatherData = require("./fetchWeatherData");
 const { fetchWeatherData } = require("../cache"); // Use cached version
 const turf = require("@turf/turf");
 
@@ -25,11 +23,33 @@ const filterBalloonsByRegion = (balloonPaths, centerLat, centerLon, radiusKm) =>
 
 // Smart sampling to distribute balloons evenly
 const sampleBalloons = (balloonPaths, targetCount) => {
-  if (balloonPaths.length <= targetCount) return balloonPaths;
+  if (balloonPaths.length <= targetCount) {
+    console.log(`Returning all ${balloonPaths.length} balloons (less than limit ${targetCount})`);
+    return balloonPaths;
+  }
 
-  // Take every Nth balloon for even distribution
-  const step = Math.ceil(balloonPaths.length / targetCount);
-  return balloonPaths.filter((_, index) => index % step === 0);
+  const step = Math.max(1, Math.floor(balloonPaths.length / targetCount));
+  const sampled = [];
+  const sampledIndices = new Set();
+
+  // First pass: take every Nth balloon
+  for (let i = 0; i < balloonPaths.length && sampled.length < targetCount; i += step) {
+    sampled.push(balloonPaths[i]);
+    sampledIndices.add(i);
+  }
+
+  // Second pass: fill remaining slots if needed
+  if (sampled.length < targetCount) {
+    for (let i = 0; i < balloonPaths.length && sampled.length < targetCount; i++) {
+      if (!sampledIndices.has(i)) {
+        sampled.push(balloonPaths[i]);
+        sampledIndices.add(i);
+      }
+    }
+  }
+
+  console.log(`Sampled ${sampled.length} from ${balloonPaths.length} (step: ${step}, target: ${targetCount})`);
+  return sampled;
 };
 const validateBalloonData = data => {
   const [lat, lon, altitude] = data;
@@ -154,184 +174,9 @@ function calculateActualMovement(sortedBalloonData) {
 }
 const fetchBalloonData = async (options = {}) => {
   const { limit = 50, lat, lon, radius = 2000 } = options;
-  const mock = false; //set to false to fetch real data
 
-  //testing purposes with mock data
-  if (mock) {
-    const responseData = await fetchWeatherData([
-      {
-        time: 0,
-        latitude: -6.72343719899604,
-        longitude: 58.84621601705491,
-        altitude: 8.9,
-        balloonID: 0,
-      },
-      {
-        time: 1,
-        latitude: -7.427397379689796,
-        longitude: 59.219998670322965,
-        altitude: 8.21,
-        balloonID: 0,
-      },
-      {
-        time: 2,
-        latitude: -8.351575932587778,
-        longitude: 59.66125288630856,
-        altitude: 7.32,
-        balloonID: 0,
-      },
-      {
-        time: 3,
-        latitude: -9.253746340353645,
-        longitude: 60.03846366639745,
-        altitude: 6.47,
-        balloonID: 0,
-      },
-      {
-        time: 4,
-        latitude: -10.136017432295269,
-        longitude: 60.35455658390073,
-        altitude: 5.68,
-        balloonID: 0,
-      },
-      {
-        time: 5,
-        latitude: -10.995153136024486,
-        longitude: 60.60826921545914,
-        altitude: 4.95,
-        balloonID: 0,
-      },
-      {
-        time: 6,
-        latitude: -11.832570661676328,
-        longitude: 60.8000097793709,
-        altitude: 4.29,
-        balloonID: 0,
-      },
-      {
-        time: 7,
-        latitude: -12.644390102302077,
-        longitude: 60.93280989809127,
-        altitude: 3.7,
-        balloonID: 0,
-      },
-      {
-        time: 8,
-        latitude: -13.429792204313108,
-        longitude: 61.00644260146874,
-        altitude: 3.19,
-        balloonID: 0,
-      },
-      {
-        time: 9,
-        latitude: -14.191888471986115,
-        longitude: 61.02264520469719,
-        altitude: 2.77,
-        balloonID: 0,
-      },
-      {
-        time: 10,
-        latitude: -14.925624703459158,
-        longitude: 60.981619637281916,
-        altitude: 2.43,
-        balloonID: 0,
-      },
-      {
-        time: 11,
-        latitude: -15.6355670633463,
-        longitude: 60.88435061937793,
-        altitude: 2.19,
-        balloonID: 0,
-      },
-      {
-        time: 12,
-        latitude: -16.31841779629241,
-        longitude: 60.73473254239623,
-        altitude: 2.05,
-        balloonID: 0,
-      },
-      {
-        time: 13,
-        latitude: -16.975190081678036,
-        longitude: 60.53231425580276,
-        altitude: 2,
-        balloonID: 0,
-      },
-      {
-        time: 14,
-        latitude: -17.607257620974003,
-        longitude: 60.27821650240992,
-        altitude: 2.05,
-        balloonID: 0,
-      },
-      {
-        time: 15,
-        latitude: -18.212380447705115,
-        longitude: 59.972881600850506,
-        altitude: 2.19,
-        balloonID: 0,
-      },
-      {
-        time: 16,
-        latitude: -18.79463050804228,
-        longitude: 59.62049531250226,
-        altitude: 2.43,
-        balloonID: 0,
-      },
-      {
-        time: 17,
-        latitude: -19.35299151842465,
-        longitude: 59.22157869764993,
-        altitude: 2.77,
-        balloonID: 0,
-      },
-      {
-        time: 18,
-        latitude: -19.88920146710626,
-        longitude: 58.775045321911364,
-        altitude: 3.19,
-        balloonID: 0,
-      },
-      {
-        time: 19,
-        latitude: -20.402915481406474,
-        longitude: 58.287079534112074,
-        altitude: 3.7,
-        balloonID: 0,
-      },
-      {
-        time: 20,
-        latitude: -20.89567605187215,
-        longitude: 57.756889149767154,
-        altitude: 4.28,
-        balloonID: 0,
-      },
-      {
-        time: 21,
-        latitude: -21.368826617336165,
-        longitude: 57.18606482020395,
-        altitude: 4.95,
-        balloonID: 0,
-      },
-      {
-        time: 22,
-        latitude: -21.825461530390122,
-        longitude: 56.575958126345164,
-        altitude: 5.68,
-        balloonID: 0,
-      },
-    ]);
-
-    const movementData = await calculateActualMovement(responseData);
-    const comparisonData = await calculateAgreementScores(movementData);
-    // console.log("Movement Data:", comparisonData);
-    return comparisonData;
-  }
   const balloonPaths = [];
   try {
-    //create fucntion to fetch data from all 23 routes
-
-    //then return array of array of balloon data mapped with id => to all balloon data for that balloon all 0-23 routes for this id
     const balloonPromises = [];
     //gets all 24 routes
     for (let i = 0; i <= 23; i++) {
@@ -360,19 +205,12 @@ const fetchBalloonData = async (options = {}) => {
             return null;
           })
       );
-      // balloonPromises.push(fetch(url).then(res => res.json()));
     }
     //all ballon data
     const balloonResults = await Promise.all(balloonPromises);
 
     const validResults = balloonResults.filter(result => result !== null && Array.isArray(result));
-    //mock data for testing
-    // const balloonResults = [
-    //   [[10.900048798584638, -150.9088746079718, 21.699713912787843]],
-    //   [[12.861441932621995, 21.550374478939425, 2.0498235838611745]],
-    //   [[-41.744405017231024, 153.0839787072968, 21.504142191058325]],
-    //   [[14.79445850551678, -71.90010219907184, 2.96962142688327]],
-    // ];
+
     if (validResults.length === 0) {
       throw new Error("No valid balloon data available. The Windborne API may be down or returning invalid data.");
     }
@@ -422,10 +260,11 @@ const fetchBalloonData = async (options = {}) => {
 
     // Sort all balloon paths
     const sortedBalloonData = sortPaths(Object.values(balloonPaths));
-    console.log(`Total balloons available: ${sortedBalloonData.length}`);
 
     // Apply regional filtering if coordinates provided
     let filteredBalloons = sortedBalloonData;
+    console.log(`Total balloons fetched: ${sortedBalloonData.length}`);
+
     if (lat && lon) {
       filteredBalloons = filterBalloonsByRegion(sortedBalloonData, lat, lon, radius);
       console.log(`Balloons within ${radius}km of (${lat}, ${lon}): ${filteredBalloons.length}`);
@@ -433,9 +272,9 @@ const fetchBalloonData = async (options = {}) => {
 
     // Smart sampling to get target count
     const sampledBalloons = sampleBalloons(filteredBalloons, limit);
-    console.log(`Processing ${sampledBalloons.length} balloons (limit: ${limit})`);
+    console.log(`Sampled ${sampledBalloons.length} balloons (requested limit: ${limit})`);
 
-    // Only fetch weather for sampled balloons (optimized)
+    // Only fetch weather for sampled balloons
     const weatherEnrichedData = await fetchWeatherData(sampledBalloons);
     const movementData = await calculateActualMovement(weatherEnrichedData);
     const comparisonData = await calculateAgreementScores(movementData);
@@ -446,47 +285,6 @@ const fetchBalloonData = async (options = {}) => {
       filtered: filteredBalloons.length,
       displayed: sampledBalloons.length,
     };
-
-    //struture is [index of balloon][array of points for that balloon sorted from oldest to newest]
-    //data is an array of objects with lat lon altitude time balloonID\
-
-    return sortPaths(Object.values(balloonPaths));
-    // return;
-    // const resposne = await fetch(url);
-    // //returns an array of data for the current time
-    // const responseData = await resposne.json();
-    // const responseData = [
-    //   [10.900048798584638, -150.9088746079718, 21.699713912787843],
-    //   [12.861441932621995, 21.550374478939425, 2.0498235838611745],
-    //   [-41.744405017231024, 153.0839787072968, 21.504142191058325],
-    //   [14.79445850551678, -71.90010219907184, 2.96962142688327],
-    // ]; //mock data
-
-    //checking for an array
-    // if (Array.isArray(responseData)) {
-    //   //filter out bad data
-    //   const validData = responseData
-    //     .filter(balloonItem =>
-    //       //validate the values of the current index
-    //       validateBalloonData(balloonItem)
-    //     )
-    //     .map((balloonItem, index) =>
-    //       //convert altitude from scale height to meters
-    //       ({
-    //         balloonId: uuidv4(),
-    //         latitude: balloonItem[0],
-    //         longitude: balloonItem[1],
-    //         altitude: balloonItem[2] * TENS_OF_KM,
-    //       })
-    //     );
-    //   returnedBalloonData.push(validData);
-    // }
-    // } catch (err) {
-    //   console.error(`Failed to fetch data from ${url}:`, err);
-    // }
-
-    //returns array of array of balloon data
-    // return returnedBalloonData;
   } catch (error) {
     console.error("Failed to fetch balloon data:", error);
     throw error;
